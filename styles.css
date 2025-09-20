@@ -385,6 +385,19 @@ h1 {
 .win-overlay.is-visible {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
+}
+
+/* Hide game UI when win popup is shown; keep only background + overlay */
+body.game-won main {
+  background: transparent;
+  box-shadow: none;
+}
+
+body.game-won main > *:not(.win-overlay) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .win-content {
@@ -404,6 +417,27 @@ h1 {
   margin: 0.25rem 0;
   font-size: 1.05rem;
   color: rgba(226, 232, 240, 0.85);
+}
+
+.win-restart-btn {
+  margin-top: 1rem;
+  border: none;
+  border-radius: 999px;
+  padding: 0.9rem 1.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), #f97316);
+  color: #0f172a;
+  cursor: pointer;
+  box-shadow: 0 18px 32px rgba(249, 115, 22, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.win-restart-btn:hover,
+.win-restart-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 36px rgba(249, 115, 22, 0.45);
+  outline: none;
 }
 
 .player-name-highlight,

@@ -75,7 +75,8 @@ const DOM = {
   finalScoreValue: document.querySelector(".final-score-value"),
   finalMovesValue: document.querySelector(".final-moves"),
   finalTimeValue: document.querySelector(".final-time"),
-  winOverlay: document.querySelector(".win-overlay")
+  winOverlay: document.querySelector(".win-overlay"),
+  winRestartButton: document.querySelector(".win-restart-btn")
 };
 
 const state = {
@@ -300,6 +301,7 @@ function createEmptySlot() {
 function hideWinAnimation() {
   DOM.winOverlay.classList.remove("is-visible");
   DOM.winOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("game-won");
 }
 
 function showWinAnimation() {
@@ -312,6 +314,11 @@ function showWinAnimation() {
   DOM.finalTimeValue.textContent = formatTime(state.timer.elapsedMs);
   DOM.winOverlay.classList.add("is-visible");
   DOM.winOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("game-won");
+  // Move focus to popup restart for accessibility
+  if (DOM.winRestartButton) {
+    DOM.winRestartButton.focus();
+  }
 }
 
 function resetGameState() {
@@ -512,6 +519,18 @@ function handleStart(event) {
 
 DOM.startForm.addEventListener("submit", handleStart);
 DOM.restartButton.addEventListener("click", openStartOverlay);
+if (DOM.winRestartButton) {
+  DOM.winRestartButton.addEventListener("click", openStartOverlay);
+}
+// Delegate in case markup changes or button is re-rendered
+if (DOM.winOverlay) {
+  DOM.winOverlay.addEventListener("click", (e) => {
+    const target = e.target;
+    if (target && target.closest && target.closest(".win-restart-btn")) {
+      openStartOverlay();
+    }
+  });
+}
 
 window.addEventListener("resize", () => {
   if (state.config) {
