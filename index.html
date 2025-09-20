@@ -1,1 +1,76 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Card Flip Memory Game</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="start-overlay" role="dialog" aria-modal="true">
+      <form class="start-form" novalidate>
+        <h2>Start New Game</h2>
+        <p class="start-intro">Tell us who is playing and how big the board should be.</p>
+        <div class="field-group">
+          <label for="playerName">Player name</label>
+          <input type="text" id="playerName" name="playerName" maxlength="20" autocomplete="off" required />
+        </div>
+        <div class="field-grid">
+          <div class="field-group">
+            <label for="rows">Rows</label>
+            <select id="rows" name="rows">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="columns">Columns</label>
+            <select id="columns" name="columns">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+        </div>
+        <p class="start-hint">Choose up to 5 rows and columns. Odd totals will leave one empty slot.</p>
+        <p class="start-error" role="alert" aria-live="polite"></p>
+        <button type="submit" class="start-btn">Start Game</button>
+      </form>
+    </div>
+    <main>
+      <header>
+        <h1>Card Flip Memory Game</h1>
+        <div class="controls">
+          <p class="status" role="status">
+            <span class="status-greeting">Hello, <span class="player-name">Player</span>!</span>
+            <span class="status-message">Use the wizard to begin.</span>
+          </p>
+          <div class="scoreboard" aria-live="polite">
+            <p class="time-display">Time: <span class="time-value">00:00</span></p>
+            <p class="score-display">Score: <span class="score-value">0 / 0</span></p>
+            <p class="moves-display">Moves: <span class="moves-value">0</span></p>
+          </div>
+          <button type="button" class="restart-btn" disabled>Restart</button>
+        </div>
+      </header>
+      <section class="game-board" aria-label="Memory card board"></section>
+      <div class="win-overlay" aria-hidden="true">
+        <div class="win-content">
+          <h2>Nice work, <span class="player-name-highlight">Player</span>!</h2>
+          <p>You matched every card in <span class="final-time">00:00</span> with <span class="final-moves">0</span> moves.</p>
+          <p class="final-score">Final score: <span class="final-score-value">0 / 0</span></p>
+        </div>
+        <div class="confetti" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+    </main>
 
+    <script src="app.js" defer></script>
+  </body>
+</html>
