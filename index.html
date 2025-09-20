@@ -1,4 +1,9 @@
 ﻿<!DOCTYPE html>
+<!--
+  H2Game — Card Flip Memory Game
+  License: MIT. You may use, copy, modify, and distribute this code freely,
+  provided you keep the copyright and permission notice. See LICENSE.
+-->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -35,7 +40,13 @@
             </select>
           </div>
         </div>
-        <p class="start-hint">Choose up to 5 rows and columns. Odd totals will leave one empty slot.</p>
+        <div class="field-group">
+          <label>
+            <input type="checkbox" id="hideMatched" name="hideMatched" checked />
+            Hide matched cards after a brief animation
+          </label>
+        </div>
+        <p class="start-hint">Choose 2–5 rows and columns. Odd totals will leave one empty slot.</p>
         <p class="start-error" role="alert" aria-live="polite"></p>
         <button type="submit" class="start-btn">Start Game</button>
       </form>

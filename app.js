@@ -1,4 +1,9 @@
-﻿// Build a palette of inline SVG images so every card has an image without external assets
+﻿/*
+  H2Game — Card Flip Memory Game
+  License: MIT. You may use, copy, modify, and distribute this code freely,
+  provided you keep the copyright and permission notice. See LICENSE.
+*/
+// Build a palette of inline SVG images so every card has an image without external assets
 function svgDataUri(bg, text) {
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 100 100'>` +
@@ -69,6 +74,7 @@ const DOM = {
   playerNameInput: document.querySelector("#playerName"),
   rowsSelect: document.querySelector("#rows"),
   columnsSelect: document.querySelector("#columns"),
+  hideMatchedInput: document.querySelector("#hideMatched"),
   scoreValue: document.querySelector(".score-value"),
   movesValue: document.querySelector(".moves-value"),
   timeValue: document.querySelector(".time-value"),
@@ -268,6 +274,9 @@ function buildDeckFor(config) {
   const totalPairs = getTotalPairs(config);
   const selectedIcons = shuffle(ICONS).slice(0, totalPairs);
   const deck = selectedIcons.flatMap((icon) => [icon, icon]);
+  if (hasOddCard(config)) {
+    deck.push(null);
+  }
   return shuffle(deck);
 }
 
@@ -393,14 +402,16 @@ function markAsMatched(card) {
   card.classList.add("matched");
   card.setAttribute("aria-label", "Matched card showing " + label);
   card.disabled = true;
-  // Disappear animation: fade/scale, then hide but keep slot reserved
-  setTimeout(() => {
-    card.classList.add("fade-out");
-  }, 600);
+  // Optionally hide matched cards after a brief animation
+  if (state.config && state.config.hideMatched) {
+    setTimeout(() => {
+      card.classList.add("fade-out");
+    }, 600);
 
-  setTimeout(() => {
-    card.classList.add("is-hidden");
-  }, 900);
+    setTimeout(() => {
+      card.classList.add("is-hidden");
+    }, 900);
+  }
 }
 
 function recordMove() {
@@ -431,7 +442,8 @@ function checkForMatch() {
       stopTimer();
       updateScoreFromTime();
       setStatusMessage(buildWinMessage(state.config.name));
-      setTimeout(showWinAnimation, 250);
+      const delay = state.config && state.config.hideMatched ? 1000 : 650;
+      setTimeout(showWinAnimation, delay);
     }
   } else {
     setStatusMessage(buildTryAgainMessage(state.config.name));
@@ -445,11 +457,14 @@ function checkForMatch() {
 
 function populateWizardFields() {
   if (!state.config) {
+    // Default values when no prior config
+    if (DOM.hideMatchedInput) DOM.hideMatchedInput.checked = true;
     return;
   }
   DOM.playerNameInput.value = state.config.name;
   DOM.rowsSelect.value = String(state.config.rows);
   DOM.columnsSelect.value = String(state.config.columns);
+  if (DOM.hideMatchedInput) DOM.hideMatchedInput.checked = Boolean(state.config.hideMatched);
 }
 
 function openStartOverlay() {
@@ -480,8 +495,8 @@ function validateSelections(name, rows, columns) {
   if (!Number.isInteger(rows) || !Number.isInteger(columns)) {
     return "Rows and columns must be whole numbers.";
   }
-  if (rows < 1 || rows > 5 || columns < 1 || columns > 5) {
-    return "Rows and columns must be between 1 and 5.";
+  if (rows < 2 || rows > 5 || columns < 2 || columns > 5) {
+    return "Rows and columns must be between 2 and 5.";
   }
   const cards = rows * columns;
   const pairsNeeded = Math.floor(cards / 2);
@@ -501,6 +516,7 @@ function handleStart(event) {
   const name = (formData.get("playerName") || "").toString().trim();
   const rows = Number(formData.get("rows"));
   const columns = Number(formData.get("columns"));
+  const hideMatched = formData.get("hideMatched") === "on";
 
   const validationError = validateSelections(name, rows, columns);
   if (validationError) {
@@ -508,7 +524,7 @@ function handleStart(event) {
     return;
   }
 
-  state.config = { name, rows, columns };
+  state.config = { name, rows, columns, hideMatched };
   DOM.playerName.textContent = name;
   DOM.playerNameHighlight.textContent = name;
 
