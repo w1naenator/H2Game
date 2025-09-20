@@ -9,7 +9,7 @@ This guide explains, step by step, how the memory game must work from a player's
 
 ## Player Experience (Step by Step)
 1) Open Game
-- Load the page and see a start dialog prompting for player name and a grid size.
+- Load the page and see a start dialog prompting for player name, email address, and a grid size.
 
 2) Choose Grid
 - Rows and Columns are each 2-5.
@@ -36,6 +36,8 @@ This guide explains, step by step, how the memory game must work from a player's
 - Moves increment on each pair comparison (every time two cards are revealed).
 - Score starts at pairs x 100 and decays over time at a steady per-second penalty.
 - Status shows progress: "Great work, <name>! <found> / <total> pairs found."
+- The best score per grid variant (by total slots) is stored locally in the browser and shown in the scoreboard.
+ - After each win, a full result (name, email, grid, score, time, moves) is saved to the browser's local database (IndexedDB) for offline history.
 
 8) Win State
 - When all pairs are matched, stop the timer and show a win overlay with name, final time, moves, and final score. Confetti animates.
@@ -67,8 +69,9 @@ This guide explains, step by step, how the memory game must work from a player's
 - Cache key DOM elements in a `DOM` map for efficient updates.
 
 3) Validation
-- On Start submit, read name + rows + columns.
+- On Start submit, read name + email + rows + columns.
 - Ensure 2-5 bounds for both. If invalid, display inline error and return.
+ - Validate email format before starting.
 
 4) Deck Building
 - Compute totalPairs = (rows x columns) / 2.
@@ -97,6 +100,8 @@ This guide explains, step by step, how the memory game must work from a player's
 8) Score & Timer
 - Start timer on first flip, update elapsed time and score periodically.
 - Score decays over time using a simple per-second penalty derived from max score.
+- Persist and display best score per grid variant using localStorage.
+ - Persist per-game results (name, email, rows, columns, slots, score, maxScore, timeMs, moves, timestamp) in IndexedDB.
 
 9) Win Flow
 - If `matchesFound === totalPairs`, stop the timer, update the final stats, and show the win overlay + confetti after the final animation finishes.

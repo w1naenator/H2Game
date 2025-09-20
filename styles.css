@@ -89,7 +89,8 @@ h1 {
 
 .time-display,
 .score-display,
-.moves-display {
+.moves-display,
+.best-display {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
@@ -98,7 +99,8 @@ h1 {
 
 .time-value,
 .score-value,
-.moves-value {
+.moves-value,
+.best-value {
   color: var(--accent);
 }
 
@@ -279,6 +281,28 @@ h1 {
 }
 
 .start-overlay.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Hide game UI while the start wizard is visible; show only page background */
+.start-overlay:not(.is-hidden) + main {
+  background: transparent;
+  box-shadow: none;
+}
+.start-overlay:not(.is-hidden) + main > * {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Robust: also hide via a body class in case structure changes */
+body.wizard-open main {
+  background: transparent;
+  box-shadow: none;
+}
+body.wizard-open main > * {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;

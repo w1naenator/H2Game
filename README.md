@@ -28,6 +28,7 @@ H2Game is a responsive, accessible, offline-ready card flip memory game. Pick a 
 - Accessible labels and focus handling
 - Configurable matched-card behavior (hide matched cards or keep them visible)
 - Win overlay with inline Restart; hides game UI behind the popup for a clean finish
+- Best score per grid variant (by total slots) is stored locally in your browser (no network)
 
 ## Project Structure
 - `index.html` - Markup, start wizard, scoreboard, game board, and win overlay

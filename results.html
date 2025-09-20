@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>H2Game Results</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      main { gap: 1rem; max-height: none; overflow: auto; }
+      .results-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+      .pager { display: flex; gap: .5rem; align-items: center; }
+      .table-scroll { width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; }
+      .results-table { width: 100%; min-width: 720px; border-collapse: collapse; background: rgba(255,255,255,0.06); border-radius: 0.75rem; overflow: hidden; }
+      .results-table th, .results-table td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid rgba(148,163,184,0.2); font-size: .95rem; }
+      .results-table th { background: rgba(255,255,255,0.06); font-weight: 700; }
+      .results-empty { padding: 1rem; text-align: center; opacity: .8; }
+      .btn { border: none; border-radius: .5rem; padding: .5rem .75rem; background: rgba(255,255,255,0.15); color: #f8fafc; cursor: pointer; }
+      .btn[disabled] { opacity: .5; cursor: not-allowed; }
+      .muted { opacity: .8; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="results-header"><h1>Results History</h1></div>
+
+      <div class="results-header">
+        <h2>Local (This Browser)</h2>
+        <div class="pager">
+          <button class="btn local-prev">Prev</button>
+          <span class="muted local-page-info">Page 1</span>
+          <button class="btn local-next">Next</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="results-table" aria-label="Local saved game results">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Grid</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Time</th>
+              <th>Moves</th>
+            </tr>
+          </thead>
+          <tbody class="local-body">
+            <tr><td class="results-empty" colspan="8">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="results-header">
+        <h2>Server (results.jsonl)</h2>
+        <div class="pager">
+          <button class="btn remote-prev">Prev</button>
+          <span class="muted remote-page-info">Page 1</span>
+          <button class="btn remote-next">Next</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="results-table" aria-label="Server saved game results">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Grid</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Time</th>
+              <th>Moves</th>
+            </tr>
+          </thead>
+          <tbody class="remote-body">
+            <tr><td class="results-empty" colspan="8">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+    <script>
+      const PAGE_SIZE = 20;
+      const els = {
+        local: {
+          body: document.querySelector('.local-body'),
+          prev: document.querySelector('.local-prev'),
+          next: document.querySelector('.local-next'),
+          info: document.querySelector('.local-page-info'),
+        },
+        remote: {
+          body: document.querySelector('.remote-body'),
+          prev: document.querySelector('.remote-prev'),
+          next: document.querySelector('.remote-next'),
+          info: document.querySelector('.remote-page-info'),
+        }
+      };
+      let localAll = [];
+      let remoteAll = [];
+      let localPage = 1;
+      let remotePage = 1;
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open('h2game', 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains('games')) {
+              const store = db.createObjectStore('games', { keyPath: 'id', autoIncrement: true });
+              store.createIndex('email', 'email', { unique: false });
+              store.createIndex('slots', 'slots', { unique: false });
+              store.createIndex('ts', 'ts', { unique: false });
+              store.createIndex('status', 'status', { unique: false });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      function formatTime(ms){ const s=Math.floor(ms/1000); const m=String(Math.floor(s/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${m}:${ss}`; }
+      function fmtDate(ts){ const d=new Date(ts||Date.now()); return d.toLocaleString(); }
+
+      async function loadAll(){
+        try {
+          const db = await openDB();
+          const tx = db.transaction('games','readonly');
+          const store = tx.objectStore('games');
+          const req = store.getAll();
+          return await new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error); });
+        } catch { return []; }
+      }
+
+      async function loadRemote(){
+        // Try to fetch results from preferred paths. PHP now writes to data/results.jsonl when possible.
+        if (!/^https?:/i.test(location.protocol)) return [];
+        const paths = ['data/results.jsonl', 'results.jsonl'];
+        const all = [];
+        for (const p of paths) {
+          try {
+            const resp = await fetch(p, { cache: 'no-store' });
+            if (!resp.ok) continue;
+            const text = await resp.text();
+            const lines = text.split(/\r?\n/).filter(Boolean);
+            for (const line of lines) {
+              try { const o = JSON.parse(line); if (o && typeof o === 'object') all.push(o); } catch {}
+            }
+          } catch {}
+        }
+        return all;
+      }
+
+      function renderOne(list, page, targets){
+        const total = list.length;
+        const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        if(page>pages) page=pages;
+        const start = (page-1)*PAGE_SIZE;
+        const slice = list.slice(start, start+PAGE_SIZE);
+        targets.info.textContent = `Page ${page} / ${pages}`;
+        targets.prev.disabled = page<=1; targets.next.disabled = page>=pages;
+        if(!slice.length){
+          targets.body.innerHTML = `<tr><td class="results-empty" colspan="8">No results</td></tr>`;
+          return page;
+        }
+        targets.body.innerHTML = slice.map(r=>{
+          const grid = `${r.rows||'?'}x${r.columns||'?'} (${r.slots||'?'})`;
+          const score = typeof r.score==='number' && typeof r.maxScore==='number' ? `${r.score} / ${r.maxScore}` : (r.score ?? '—');
+          const time = typeof r.timeMs==='number' ? formatTime(r.timeMs) : '—';
+          const moves = typeof r.moves==='number' ? r.moves : '—';
+          const status = r.status || 'started';
+          return `<tr>
+            <td>${fmtDate(r.ts)}</td>
+            <td>${(r.name||'').toString().slice(0,40)}</td>
+            <td>${(r.email||'').toString().slice(0,80)}</td>
+            <td>${grid}</td>
+            <td>${status}</td>
+            <td>${score}</td>
+            <td>${time}</td>
+            <td>${moves}</td>
+          </tr>`;
+        }).join('');
+        return page;
+      }
+      function render(){
+        localPage = renderOne(localAll, localPage, els.local);
+        remotePage = renderOne(remoteAll, remotePage, els.remote);
+      }
+
+      (async function init(){
+        localAll = await loadAll();
+        localAll.sort((a,b)=> (b.ts||0) - (a.ts||0));
+        remoteAll = await loadRemote();
+        remoteAll.sort((a,b)=> (b.ts||0) - (a.ts||0));
+        render();
+        els.local.prev.addEventListener('click', ()=>{ if(localPage>1){ localPage--; render(); } });
+        els.local.next.addEventListener('click', ()=>{ const pages=Math.max(1,Math.ceil(localAll.length/PAGE_SIZE)); if(localPage<pages){ localPage++; render(); } });
+        els.remote.prev.addEventListener('click', ()=>{ if(remotePage>1){ remotePage--; render(); } });
+        els.remote.next.addEventListener('click', ()=>{ const pages=Math.max(1,Math.ceil(remoteAll.length/PAGE_SIZE)); if(remotePage<pages){ remotePage++; render(); } });
+      })();
+    </script>
+  </body>
+  </html>

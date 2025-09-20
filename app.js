@@ -72,12 +72,14 @@ const DOM = {
   startForm: document.querySelector(".start-form"),
   startError: document.querySelector(".start-error"),
   playerNameInput: document.querySelector("#playerName"),
+  emailInput: document.querySelector("#email"),
   rowsSelect: document.querySelector("#rows"),
   columnsSelect: document.querySelector("#columns"),
   hideMatchedInput: document.querySelector("#hideMatched"),
   scoreValue: document.querySelector(".score-value"),
   movesValue: document.querySelector(".moves-value"),
   timeValue: document.querySelector(".time-value"),
+  bestValue: document.querySelector(".best-value"),
   finalScoreValue: document.querySelector(".final-score-value"),
   finalMovesValue: document.querySelector(".final-moves"),
   finalTimeValue: document.querySelector(".final-time"),
@@ -101,6 +103,36 @@ const state = {
     elapsedMs: 0
   }
 };
+
+const STORAGE = { prefix: "H2Game:best:slots-" };
+
+// Simple IndexedDB helper for storing per-game results locally (offline)
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('h2game', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('games')) {
+        const store = db.createObjectStore('games', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('email', 'email', { unique: false });
+        store.createIndex('slots', 'slots', { unique: false });
+        store.createIndex('ts', 'ts', { unique: false });
+        store.createIndex('status', 'status', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function saveResultRecord(record) {
+  try {
+    openDB().then((db) => {
+      const tx = db.transaction('games', 'readwrite');
+      tx.objectStore('games').add(record);
+    }).catch(() => {});
+  } catch (_) {}
+}
 
 function shuffle(array) {
   const copy = [...array];
@@ -151,6 +183,8 @@ function clearBoard() {
 function setOverlayVisible(isVisible) {
   DOM.startOverlay.classList.toggle("is-hidden", !isVisible);
   DOM.startOverlay.setAttribute("aria-hidden", String(!isVisible));
+  // Also toggle a body flag so CSS can reliably hide the game UI behind the wizard
+  document.body.classList.toggle("wizard-open", !!isVisible);
 }
 
 function updateScoreDisplay() {
@@ -159,6 +193,54 @@ function updateScoreDisplay() {
 
 function updateMovesDisplay() {
   DOM.movesValue.textContent = String(state.moves);
+}
+
+function getVariantStorageKey(config) {
+  const slots = getTotalCards(config);
+  return `${STORAGE.prefix}${slots}`;
+}
+
+function loadBestScore(config) {
+  try {
+    const raw = localStorage.getItem(getVariantStorageKey(config));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveBestScoreIfHigher(config, payload) {
+  try {
+    const existing = loadBestScore(config);
+    if (!existing || (payload && typeof payload.score === "number" && payload.score > existing.score)) {
+      localStorage.setItem(getVariantStorageKey(config), JSON.stringify(payload));
+      return payload;
+    }
+    return existing;
+  } catch {
+    return null;
+  }
+}
+
+function updateBestDisplay() {
+  if (!DOM.bestValue || !state.config) return;
+  const best = loadBestScore(state.config);
+  DOM.bestValue.textContent = best && typeof best.score === "number" ? String(best.score) : "—";
+}
+
+// Try posting a result to server-side PHP endpoint if available; ignore failures
+async function postResultToServer(record) {
+  try {
+    const res = await fetch('save_result.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 function formatTime(ms) {
@@ -233,6 +315,7 @@ function initialiseScore(totalPairs) {
   updateMovesDisplay();
   resetTimer();
   updateScoreDisplay();
+  updateBestDisplay();
 }
 
 function resizeBoard() {
@@ -351,6 +434,22 @@ function resetBoard() {
   const totalPairs = getTotalPairs(state.config);
   initialiseScore(totalPairs);
 
+  // Log a started game into local DB for history, even if not completed later
+  (function(){ const rec = {
+    status: 'started',
+    name: state.config.name,
+    email: state.config.email || '',
+    rows: state.config.rows,
+    columns: state.config.columns,
+    hideMatched: !!state.config.hideMatched,
+    slots: getTotalCards(state.config),
+    score: 0,
+    maxScore: state.maxScore,
+    timeMs: 0,
+    moves: 0,
+    ts: Date.now()
+  }; saveResultRecord(rec); postResultToServer(rec); })();
+
   const deck = buildDeckFor(state.config);
   let cardIndex = 0;
   for (let i = 0; i < deck.length; i += 1) {
@@ -442,6 +541,34 @@ function checkForMatch() {
       stopTimer();
       updateScoreFromTime();
       setStatusMessage(buildWinMessage(state.config.name));
+      // Persist best score per total slots (rows x columns)
+      saveBestScoreIfHigher(state.config, {
+        score: state.score,
+        slots: getTotalCards(state.config),
+        timeMs: state.timer.elapsedMs,
+        moves: state.moves,
+        timestamp: Date.now()
+      });
+      updateBestDisplay();
+      // Save full game result to local database (IndexedDB)
+      (function saveDB() {
+        const record = {
+          status: 'completed',
+          name: state.config.name,
+          email: state.config.email,
+          rows: state.config.rows,
+          columns: state.config.columns,
+          hideMatched: !!state.config.hideMatched,
+          slots: getTotalCards(state.config),
+          score: state.score,
+          maxScore: state.maxScore,
+          timeMs: state.timer.elapsedMs,
+          moves: state.moves,
+          ts: Date.now()
+        };
+        saveResultRecord(record);
+        postResultToServer(record);
+      })();
       const delay = state.config && state.config.hideMatched ? 1000 : 650;
       setTimeout(showWinAnimation, delay);
     }
@@ -462,6 +589,7 @@ function populateWizardFields() {
     return;
   }
   DOM.playerNameInput.value = state.config.name;
+  if (DOM.emailInput) DOM.emailInput.value = state.config.email || "";
   DOM.rowsSelect.value = String(state.config.rows);
   DOM.columnsSelect.value = String(state.config.columns);
   if (DOM.hideMatchedInput) DOM.hideMatchedInput.checked = Boolean(state.config.hideMatched);
@@ -470,6 +598,27 @@ function populateWizardFields() {
 function openStartOverlay() {
   resetGameState();
   hideWinAnimation();
+  // If there was an ongoing game, log it as abandoned so it appears in results
+  if (state.config) {
+    const totalPairs = getTotalPairs(state.config);
+    const wasInProgress = state.matchesFound < totalPairs && (state.moves > 0 || state.timer.elapsedMs > 0);
+    if (wasInProgress) {
+      (function(){ const rec = {
+        status: 'abandoned',
+        name: state.config.name,
+        email: state.config.email || '',
+        rows: state.config.rows,
+        columns: state.config.columns,
+        hideMatched: !!state.config.hideMatched,
+        slots: getTotalCards(state.config),
+        score: state.score,
+        maxScore: state.maxScore,
+        timeMs: state.timer.elapsedMs,
+        moves: state.moves,
+        ts: Date.now()
+      }; saveResultRecord(rec); postResultToServer(rec); })();
+    }
+  }
   clearBoard();
   setStatusMessage("Use the wizard to begin.");
   DOM.restartButton.disabled = true;
@@ -488,9 +637,16 @@ function openStartOverlay() {
   requestAnimationFrame(() => DOM.playerNameInput.focus());
 }
 
-function validateSelections(name, rows, columns) {
+function validateSelections(name, email, rows, columns) {
   if (!name) {
     return "Please enter a player name.";
+  }
+  if (!email) {
+    return "Please enter an email address.";
+  }
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(email)) {
+    return "Please enter a valid email address.";
   }
   if (!Number.isInteger(rows) || !Number.isInteger(columns)) {
     return "Rows and columns must be whole numbers.";
@@ -514,17 +670,18 @@ function handleStart(event) {
 
   const formData = new FormData(DOM.startForm);
   const name = (formData.get("playerName") || "").toString().trim();
+  const email = (formData.get("email") || "").toString().trim();
   const rows = Number(formData.get("rows"));
   const columns = Number(formData.get("columns"));
   const hideMatched = formData.get("hideMatched") === "on";
 
-  const validationError = validateSelections(name, rows, columns);
+  const validationError = validateSelections(name, email, rows, columns);
   if (validationError) {
     DOM.startError.textContent = validationError;
     return;
   }
 
-  state.config = { name, rows, columns, hideMatched };
+  state.config = { name, email, rows, columns, hideMatched };
   DOM.playerName.textContent = name;
   DOM.playerNameHighlight.textContent = name;
 
