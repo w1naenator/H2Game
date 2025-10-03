@@ -34,32 +34,65 @@ const COLORS = [
   "#f43f5e", "#4ade80"
 ];
 
-/* Switch deck to emoji pairs */
-const EMOJI_CONFIGS = [
-  { glyph: "🐶", label: "Dog" },
-  { glyph: "🐱", label: "Cat" },
-  { glyph: "🐭", label: "Mouse" },
-  { glyph: "🐰", label: "Bunny" },
-  { glyph: "🐼", label: "Panda" },
-  { glyph: "🐸", label: "Frog" },
-  { glyph: "🐵", label: "Monkey" },
-  { glyph: "🐔", label: "Rooster" },
-  { glyph: "🐤", label: "Chick" },
-  { glyph: "🐙", label: "Octopus" },
-  { glyph: "🐠", label: "Fish" },
-  { glyph: "🐟", label: "Tropical Fish" },
-  { glyph: "🐬", label: "Dolphin" },
-  { glyph: "🐳", label: "Whale" },
-  { glyph: "🌸", label: "Blossom" },
-  { glyph: "🌻", label: "Sunflower" },
-  { glyph: "🍓", label: "Strawberry" },
-  { glyph: "🍉", label: "Watermelon" }
-];
+// Utilities to derive a dark background color from an image
+function computeFirstPixelColorFromImage(img) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  canvas.width = 1;
+  canvas.height = 1;
+  try {
+    // Draw only the top-left 1x1 source pixel into a 1x1 destination
+    ctx.drawImage(img, 0, 0, 1, 1, 0, 0, 1, 1);
+    const d = ctx.getImageData(0, 0, 1, 1).data;
+    const a = d[3];
+    if (a < 16) return [99, 102, 241];
+    return [d[0], d[1], d[2]];
+  } catch (_) {
+    // If canvas is tainted or any error occurs, fall back to a sensible default
+    return [99, 102, 241];
+  }
+}
 
-const ICONS = EMOJI_CONFIGS.map((config, index) => ({
-  id: `emoji-${index + 1}`,
-  label: config.label,
-  glyph: config.glyph
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+  if (!m) return [99, 102, 241];
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function ensureDarkRgb(r, g, b) {
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const target = 40; // aim for a dark luma
+  const factor = Math.max(0.2, Math.min(0.9, target / Math.max(1, luma)));
+  return [
+    Math.round(r * factor),
+    Math.round(g * factor),
+    Math.round(b * factor)
+  ];
+}
+
+function setCardBgFromImage(button, imgEl, fallbackHex) {
+  const apply = () => {
+    const [ar, ag, ab] = computeFirstPixelColorFromImage(imgEl);
+    const [dr, dg, db] = ensureDarkRgb(ar, ag, ab);
+    button.style.setProperty('--card-bg', `rgba(${dr}, ${dg}, ${db}, 0.95)`);
+  };
+  if (imgEl.complete && imgEl.naturalWidth) {
+    apply();
+  } else {
+    imgEl.addEventListener('load', apply, { once: true });
+  }
+  if (fallbackHex) {
+    const [fr, fg, fb] = ensureDarkRgb(...hexToRgb(fallbackHex));
+    // Set an immediate dark-ish color to avoid light flicker before load
+    button.style.setProperty('--card-bg', `rgba(${fr}, ${fg}, ${fb}, 0.9)`);
+  }
+}
+
+const IMAGE_COUNT = 20;
+const ICONS = Array.from({ length: IMAGE_COUNT }, (_, i) => ({
+  id: `img-${i}`,
+  label: `Image ${i}`,
+  src: `assets/img/cards/${i}.png`
 }));
 
 const DOM = {
@@ -377,16 +410,21 @@ function createCardElement(icon, index) {
   button.setAttribute("aria-label", "Hidden card " + (index + 1));
   button.dataset.value = icon.id;
   button.dataset.label = icon.label;
-  // Build a data-URI image for the emoji so a real <img> appears on flip
   const idNum = Number((icon.id || "").split("-")[1]) || 1;
   const bgColor = COLORS[(idNum - 1) % COLORS.length] || "#6366f1";
-  const imageSrc = svgDataUri(bgColor, icon.glyph);
+  const imageSrc = icon.src ? icon.src : svgDataUri(bgColor, icon.glyph || "?");
   button.innerHTML = `
     <span class="card-inner">
       <span class="card-face card-front" aria-hidden="true">?</span>
       <span class="card-face card-back"><img class="card-image" src="${imageSrc}" alt="${icon.label}"></span>
     </span>
   `;
+  const imgEl = button.querySelector('.card-image');
+  if (imgEl) {
+    imgEl.addEventListener('error', () => {
+      imgEl.src = svgDataUri(bgColor, '?');
+    }, { once: true });
+  }
   button.addEventListener("click", handleCardClick);
   return button;
 }
@@ -484,6 +522,8 @@ function handleCardClick(event) {
 
   ensureTimerRunning();
   flipCard(card);
+  // Highlight the clicked card so it's easy to track
+  card.classList.add("is-selected");
   state.cardsInPlay.push(card);
 
   if (state.cardsInPlay.length === 2) {
@@ -535,6 +575,11 @@ function checkForMatch() {
   recordMove();
 
   if (firstCard.dataset.value === secondCard.dataset.value) {
+    // Remove highlights on both cards after flip animation completes
+    setTimeout(() => {
+      firstCard.classList.remove('is-selected');
+      secondCard.classList.remove('is-selected');
+    }, 650);
     const totalPairs = getTotalPairs(state.config);
 
     markAsMatched(firstCard);
@@ -581,6 +626,11 @@ function checkForMatch() {
     }
   } else {
     setStatusMessage(buildTryAgainMessage(state.config.name));
+    // Remove highlights on both cards after flip animation completes
+    setTimeout(() => {
+      firstCard.classList.remove('is-selected');
+      secondCard.classList.remove('is-selected');
+    }, 650);
     setTimeout(() => {
       hideCard(firstCard);
       hideCard(secondCard);
@@ -592,7 +642,7 @@ function checkForMatch() {
 function populateWizardFields() {
   if (!state.config) {
     // Default values when no prior config
-    if (DOM.hideMatchedInput) DOM.hideMatchedInput.checked = true;
+    if (DOM.hideMatchedInput) DOM.hideMatchedInput.checked = false;
     return;
   }
   DOM.playerNameInput.value = state.config.name;
