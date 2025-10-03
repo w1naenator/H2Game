@@ -1,7 +1,7 @@
-# H2Game - Card Flip Memory Game
+# Flip to Match Game
 
 ## Game Description
-H2Game is a responsive, accessible, offline-ready card flip memory game. Pick a grid, flip two cards at a time, and find all matching pairs. The game features smooth 3D flip animations, time-based scoring, and a celebratory win screen with confetti. It works entirely from local files - no server or network required.
+Flip to Match Game is a responsive, accessible, offline-ready card flip memory game. Pick a grid, flip two cards at a time, and find all matching pairs. The game features smooth 3D flip animations, time-based scoring, and a celebratory win screen with confetti. It works entirely from local files - no server or network required.
 
 ### How to Play
 - Open `index.html` in your browser.
@@ -32,8 +32,12 @@ H2Game is a responsive, accessible, offline-ready card flip memory game. Pick a 
 
 ## Project Structure
 - `index.html` - Markup, start wizard, scoreboard, game board, and win overlay
-- `styles.css` - Layout, responsive grid, animations, and theming
-- `app.js` - Game logic, deck builder, timer/score, and interactions
+- `results.html` - Local/server results viewer (optional)
+- `assets/` - Frontend assets
+  - `assets/css/styles.css` - Main stylesheet
+  - `assets/js/app.js` - Main game logic and interactions
+- `api/save_result.php` - Optional endpoint to persist results server-side
+- `data/` - Target folder for server-side `results.jsonl` writes
 
 ## License (MIT)
 This project is licensed under the MIT License.
@@ -44,4 +48,4 @@ This project is licensed under the MIT License.
 See the LICENSE file for the full text.
 
 ## Trademarks
-- "Memory" is a registered trademark of Ravensburger in many jurisdictions. This project is not affiliated with, sponsored by, or endorsed by Ravensburger. The title used here is descriptive ("Card Flip Memory Game"). If you plan to publish, consider using a distinct title (e.g., "Card Flip Match Game").
+- "Memory" is a registered trademark of Ravensburger in many jurisdictions. This project is not affiliated with, sponsored by, or endorsed by Ravensburger. The title used here is descriptive ("Flip to Match Game").

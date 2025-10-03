@@ -1,9 +1,9 @@
 <!--
-  H2Game — Card Flip Memory Game
+  Flip to Match Game
   License: MIT. You may use, copy, modify, and distribute this code freely,
   provided you keep the copyright and permission notice. See LICENSE.
 -->
-# H2Game - Step-By-Step Assignment Guide
+# Flip to Match Game - Step-By-Step Assignment Guide
 
 This guide explains, step by step, how the memory game must work from a player's and developer's perspective. It replaces prior notes and serves as the single source of truth for scope and acceptance.
 

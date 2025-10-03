@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>H2Game Results</title>
-    <link rel="stylesheet" href="styles.css" />
+    <title>Flip to Match Results</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
     <style>
       main { gap: 1rem; max-height: none; overflow: auto; }
       .results-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
@@ -100,9 +100,9 @@
       let localPage = 1;
       let remotePage = 1;
 
-      function openDB() {
+      function openDB(name='flip2match') {
         return new Promise((resolve, reject) => {
-          const req = indexedDB.open('h2game', 1);
+          const req = indexedDB.open(name, 1);
           req.onupgradeneeded = () => {
             const db = req.result;
             if (!db.objectStoreNames.contains('games')) {
@@ -121,9 +121,9 @@
       function formatTime(ms){ const s=Math.floor(ms/1000); const m=String(Math.floor(s/60)).padStart(2,'0'); const ss=String(s%60).padStart(2,'0'); return `${m}:${ss}`; }
       function fmtDate(ts){ const d=new Date(ts||Date.now()); return d.toLocaleString(); }
 
-      async function loadAll(){
+      async function loadAllFrom(name){
         try {
-          const db = await openDB();
+          const db = await openDB(name);
           const tx = db.transaction('games','readonly');
           const store = tx.objectStore('games');
           const req = store.getAll();
@@ -187,7 +187,9 @@
       }
 
       (async function init(){
-        localAll = await loadAll();
+        const newDb = await loadAllFrom('flip2match');
+        const oldDb = await loadAllFrom('h2game');
+        localAll = [...newDb, ...oldDb];
         localAll.sort((a,b)=> (b.ts||0) - (a.ts||0));
         remoteAll = await loadRemote();
         remoteAll.sort((a,b)=> (b.ts||0) - (a.ts||0));

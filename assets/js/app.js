@@ -1,5 +1,5 @@
 ﻿/*
-  H2Game — Card Flip Memory Game
+  Flip to Match Game
   License: MIT. You may use, copy, modify, and distribute this code freely,
   provided you keep the copyright and permission notice. See LICENSE.
 */
@@ -104,12 +104,12 @@ const state = {
   }
 };
 
-const STORAGE = { prefix: "H2Game:best:slots-" };
+const STORAGE = { prefix: "FlipToMatchGame:best:slots-", legacyPrefix: "H2Game:best:slots-" };
 
 // Simple IndexedDB helper for storing per-game results locally (offline)
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('h2game', 1);
+    const req = indexedDB.open('flip2match', 1);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('games')) {
@@ -202,9 +202,16 @@ function getVariantStorageKey(config) {
 
 function loadBestScore(config) {
   try {
-    const raw = localStorage.getItem(getVariantStorageKey(config));
-    if (!raw) return null;
-    return JSON.parse(raw);
+    const key = getVariantStorageKey(config);
+    let raw = localStorage.getItem(key);
+    if (!raw && STORAGE.legacyPrefix) {
+      const legacyKey = `${STORAGE.legacyPrefix}${getTotalCards(config)}`;
+      raw = localStorage.getItem(legacyKey);
+      if (raw) {
+        try { localStorage.setItem(key, raw); } catch {}
+      }
+    }
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
@@ -232,7 +239,7 @@ function updateBestDisplay() {
 // Try posting a result to server-side PHP endpoint if available; ignore failures
 async function postResultToServer(record) {
   try {
-    const res = await fetch('save_result.php', {
+    const res = await fetch('api/save_result.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(record)

@@ -1,5 +1,5 @@
 <?php
-// H2Game — Save Result Endpoint (PHP)
+// Flip to Match Game — Save Result Endpoint (PHP)
 // Stores posted JSON results into results.jsonl (prefer data/ subfolder) next to this file.
 // If writing to the web root is not permitted, it falls back to a temp directory.
 
@@ -56,13 +56,13 @@ $jsonl = json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) .
 
 // Choose a writable path
 $candidates = [];
-$dataDir = __DIR__ . DIRECTORY_SEPARATOR . 'data';
-if (!is_dir($dataDir)) {
-  // Try create data/ if possible
-  @mkdir($dataDir, 0775, true);
+// Prefer the repo root data/ folder (../data relative to api/) if writable,
+// then fall back to the current directory (api/) if needed.
+$rootData = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'data';
+if (!is_dir($rootData)) {
+  @mkdir($rootData, 0775, true);
 }
-// Prefer data/ then current dir
-$candidates[] = $dataDir;
+$candidates[] = $rootData;
 $candidates[] = __DIR__;
 
 $written = false;
@@ -91,7 +91,7 @@ foreach ($candidates as $dir) {
 
 // Fall back to temp dir
 if (!$written) {
-  $tmp = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'h2game-results.jsonl';
+  $tmp = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'flip2match-results.jsonl';
   $fh = @fopen($tmp, 'ab');
   if ($fh) {
     $ok = fwrite($fh, $jsonl) !== false;
