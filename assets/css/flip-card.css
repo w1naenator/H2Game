@@ -1,0 +1,105 @@
+/* FlipCard library styles: structure + animation */
+
+/* Card inner 3D container */
+.card {
+  perspective: 800px;
+  -webkit-perspective: 800px; /* Safari */
+}
+
+.card__inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d; /* Safari */
+  will-change: transform, opacity;
+  transition: transform calc(var(--duration, 600ms) / 2) ease;
+  transform: rotateY(0deg);
+  -webkit-transform: rotateY(0deg);
+  overflow: hidden;
+}
+
+/* Phase to rib (0 -> 90deg) */
+.card.to-rib .card__inner {
+  transform: rotateY(90deg);
+  -webkit-transform: rotateY(90deg);
+}
+
+/* Reverse state (180deg) */
+.card.is-reverse:not(.to-rib) .card__inner {
+  transform: rotateY(180deg);
+  -webkit-transform: rotateY(180deg);
+}
+
+/* The visual plane that shows the current face (back or front) */
+.card__plane {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: #000; /* default background for both sides */
+  background-position: center center;
+  background-repeat: no-repeat;
+  /* Default to contain for face images */
+  background-size: contain;
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.25);
+}
+
+/* When showing reverse/back, fill the card fully */
+.card.is-reverse .card__plane {
+  background-size: cover;
+}
+
+/* Mirror the plane in reverse so visuals remain unmirrored (illusion of two faces) */
+.card.is-reverse .card__plane {
+  transform: scaleX(-1);
+}
+
+/* Optional 3D edges visible near the rib */
+.card__edge {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.card.at-rib .card__edge,
+.card.to-rib .card__edge {
+  opacity: 1;
+}
+.card__edge--left,
+.card__edge--right {
+  top: 6%;
+  bottom: 6%;
+  width: 8px;
+}
+.card__edge--left { left: 0; background: linear-gradient(90deg, rgba(0,0,0,0.35), transparent); }
+.card__edge--right { right: 0; background: linear-gradient(270deg, rgba(0,0,0,0.35), transparent); }
+.card__edge--top,
+.card__edge--bottom {
+  left: 6%;
+  right: 6%;
+  height: 8px;
+}
+.card__edge--top { top: 0; background: linear-gradient(180deg, rgba(0,0,0,0.25), transparent); }
+.card__edge--bottom { bottom: 0; background: linear-gradient(0deg, rgba(0,0,0,0.25), transparent); }
+
+/* Highlight ring that rotates with the card */
+.card.card--highlight .card__inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 3px solid var(--accent, #fcd34d);
+  box-shadow: 0 0 24px rgba(252, 211, 77, 0.65);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Hide matched effect compatibility (paired with body.hide-matched) */
+.hide-matched .card.matched.fade-out .card__inner {
+  opacity: 0;
+  transform: scale(0.9);
+  -webkit-transform: scale(0.9);
+}
+
+/* Fully hidden matched cards */
+.card.is-hidden { visibility: hidden; opacity: 0; pointer-events: none; }

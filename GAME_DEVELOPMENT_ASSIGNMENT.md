@@ -138,3 +138,57 @@ This guide explains, step by step, how the memory game must work from a player's
 - Persist high scores (localStorage) per grid.
 - Sound effects and theme packs (alternate emoji/image sets).
 - Keyboard controls and richer screen reader hints.
+
+## Flip Animation (Reverse → Rib → Face)
+
+### Definitions
+- `Reverse` (start): Card shows its reverse/back image. This is the default state for all cards.
+- `Rib` (edge-on): Card is exactly edge-on (≈90°), so only a thin highlight/rim is visible.
+- `Face` (revealed): Card shows its face/front image.
+
+### Open Flip (Reverse → Face)
+1) Click + Highlight
+- On click, highlight the card (keep reverse image visible). Timer starts on the first ever flip.
+
+2) Rotate to Rib
+- Animate rotation from 0° to ≈90°. As it approaches 90°, the visible area narrows to the card “rib”.
+
+3) Switch Content at Rib
+- At ≈90°, switch which face is considered visible so the card now represents the `Face` image (still effectively edge-on to the user).
+
+4) Complete Rotation to Face
+- Continue rotation from ≈90° to 180° until the face/front is fully visible. The highlight stays visible throughout.
+
+### Close Flip (Face → Reverse)
+1) Rotate to Rib
+- From Face, animate rotation back from 180° to ≈90°. Keep the face image and highlight visible during this half.
+
+2) Switch Content at Rib
+- At ≈90°, switch content to `Reverse` (still edge-on to the user).
+
+3) Complete Rotation to Reverse
+- Continue rotation from ≈90° to 0° until the reverse/back is fully visible. Remove the highlight after the flip finishes.
+
+### Second Click, Match, and Mismatch
+- Second card follows the same open sequence (steps 1–4). Both cards should be highlighted while selected.
+- If values match:
+  - Remove both highlights after the flip completes. Cards remain revealed and disabled.
+  - If “Hide matched” is ON: after a short delay, fade/scale the cards and hide them (no layout shift).
+- If values do not match:
+  - After comparison, both cards follow the close sequence (Face → Reverse). Remove highlights after the flip completes.
+
+### Timing & Visual Requirements
+- Total flip duration: about 600 ms per card (≈300 ms to rib + ≈300 ms from rib).
+- The highlight rotates with the card, above card content, and is clearly visible at all times.
+- Only one face renders at a time to avoid mirrored bleed-through (use backface-visibility and/or visibility toggles across states).
+
+### Accessibility & State Updates
+- Update ARIA labels when a card becomes revealed/hidden/matched.
+- Announce state transitions around the rib point when content switches (e.g., “Revealed card showing <label>”).
+
+### Acceptance Checks (Flip Specific)
+1) At start, all cards show reverse/back.
+2) On click, highlight appears and reverse remains visible until the rib.
+3) Content switches exactly at rib; before rib: reverse; after rib: face (and vice versa when flipping back).
+4) Both selected cards are highlighted; highlights are removed after match resolution or after flip-back completes.
+5) With “Hide matched” ON, matched cards fade/scale and hide after staying revealed briefly; with OFF, they remain revealed and disabled.

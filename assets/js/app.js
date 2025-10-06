@@ -3,7 +3,7 @@
   License: MIT. You may use, copy, modify, and distribute this code freely,
   provided you keep the copyright and permission notice. See LICENSE.
 */
-// Build a palette of inline SVG images so every card has an image without external assets
+// Build a fallback inline SVG image used if a PNG fails to load
 function svgDataUri(bg, text) {
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 100 100'>` +
@@ -19,74 +19,6 @@ function svgDataUri(bg, text) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const IMAGE_NAMES = [
-  "Aurora", "Blossom", "Comet", "Dawn", "Echo", "Flame", "Glacier", "Harbor",
-  "Indigo", "Jade", "Koi", "Lotus", "Mango", "Nebula", "Orchid", "Pearl",
-  "Quartz", "Raven", "Saffron", "Topaz", "Umber", "Violet", "Wave", "Xenon",
-  "Yarrow", "Zephyr"
-];
-
-const COLORS = [
-  "#ef4444", "#f59e0b", "#10b981", "#22c55e", "#06b6d4", "#3b82f6",
-  "#6366f1", "#8b5cf6", "#d946ef", "#ec4899", "#f43f5e", "#84cc16",
-  "#f97316", "#22d3ee", "#14b8a6", "#a3e635", "#eab308", "#fb7185",
-  "#60a5fa", "#34d399", "#fcd34d", "#a78bfa", "#f472b6", "#38bdf8",
-  "#f43f5e", "#4ade80"
-];
-
-// Utilities to derive a dark background color from an image
-function computeFirstPixelColorFromImage(img) {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  canvas.width = 1;
-  canvas.height = 1;
-  try {
-    // Draw only the top-left 1x1 source pixel into a 1x1 destination
-    ctx.drawImage(img, 0, 0, 1, 1, 0, 0, 1, 1);
-    const d = ctx.getImageData(0, 0, 1, 1).data;
-    const a = d[3];
-    if (a < 16) return [99, 102, 241];
-    return [d[0], d[1], d[2]];
-  } catch (_) {
-    // If canvas is tainted or any error occurs, fall back to a sensible default
-    return [99, 102, 241];
-  }
-}
-
-function hexToRgb(hex) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
-  if (!m) return [99, 102, 241];
-  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-}
-
-function ensureDarkRgb(r, g, b) {
-  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  const target = 40; // aim for a dark luma
-  const factor = Math.max(0.2, Math.min(0.9, target / Math.max(1, luma)));
-  return [
-    Math.round(r * factor),
-    Math.round(g * factor),
-    Math.round(b * factor)
-  ];
-}
-
-function setCardBgFromImage(button, imgEl, fallbackHex) {
-  const apply = () => {
-    const [ar, ag, ab] = computeFirstPixelColorFromImage(imgEl);
-    const [dr, dg, db] = ensureDarkRgb(ar, ag, ab);
-    button.style.setProperty('--card-bg', `rgba(${dr}, ${dg}, ${db}, 0.95)`);
-  };
-  if (imgEl.complete && imgEl.naturalWidth) {
-    apply();
-  } else {
-    imgEl.addEventListener('load', apply, { once: true });
-  }
-  if (fallbackHex) {
-    const [fr, fg, fb] = ensureDarkRgb(...hexToRgb(fallbackHex));
-    // Set an immediate dark-ish color to avoid light flicker before load
-    button.style.setProperty('--card-bg', `rgba(${fr}, ${fg}, ${fb}, 0.9)`);
-  }
-}
 
 const IMAGE_COUNT = 20;
 const ICONS = Array.from({ length: IMAGE_COUNT }, (_, i) => ({
@@ -94,6 +26,12 @@ const ICONS = Array.from({ length: IMAGE_COUNT }, (_, i) => ({
   label: `Image ${i}`,
   src: `assets/img/cards/${i}.png`
 }));
+
+// Reverse (back) image used for the card's hidden side
+const REVERSE_IMAGE_SRC = 'assets/img/cards/r.png';
+
+// Pause between revealing two cards and taking next action (match or flip back)
+const RESULT_PAUSE_MS = 800;
 
 const DOM = {
   board: document.querySelector(".game-board"),
@@ -129,6 +67,7 @@ const state = {
   score: 0,
   maxScore: 0,
   timePenaltyPerSecond: 0,
+  cardAspect: 1.2,
   timer: {
     intervalId: null,
     running: false,
@@ -364,8 +303,25 @@ function resizeBoard() {
   }
 
   const { columns, rows } = state.config;
-  const ratio = 1.2;
+  // Prefer dynamic aspect ratio set from reverse image; fallback to 1.2
+  let ratio = state.cardAspect || 1.2; // numeric height/width
   const boardStyles = getComputedStyle(DOM.board);
+  const cssVar = (boardStyles.getPropertyValue('--card-aspect') || '').trim();
+  if (cssVar) {
+    // Support either numeric height/width or CSS ratio 'w / h'
+    const slash = cssVar.indexOf('/');
+    if (slash !== -1) {
+      const left = parseFloat(cssVar.slice(0, slash));
+      const right = parseFloat(cssVar.slice(slash + 1));
+      if (isFinite(left) && isFinite(right) && left > 0 && right > 0) {
+        // cssVar is w / h; convert to h/w numeric for calculations
+        ratio = right / left;
+      }
+    } else {
+      const numeric = parseFloat(cssVar);
+      if (!Number.isNaN(numeric) && numeric > 0.1) ratio = numeric;
+    }
+  }
   const gap = parseFloat(boardStyles.gap) || 16;
 
   const main = DOM.board.closest("main");
@@ -410,22 +366,30 @@ function createCardElement(icon, index) {
   button.setAttribute("aria-label", "Hidden card " + (index + 1));
   button.dataset.value = icon.id;
   button.dataset.label = icon.label;
-  const idNum = Number((icon.id || "").split("-")[1]) || 1;
-  const bgColor = COLORS[(idNum - 1) % COLORS.length] || "#6366f1";
-  const imageSrc = icon.src ? icon.src : svgDataUri(bgColor, icon.glyph || "?");
-  button.innerHTML = `
-    <span class="card-inner">
-      <span class="card-face card-front" aria-hidden="true">?</span>
-      <span class="card-face card-back"><img class="card-image" src="${imageSrc}" alt="${icon.label}"></span>
-    </span>
-  `;
-  const imgEl = button.querySelector('.card-image');
-  if (imgEl) {
-    imgEl.addEventListener('error', () => {
-      imgEl.src = svgDataUri(bgColor, '?');
-    }, { once: true });
-  }
-  button.addEventListener("click", handleCardClick);
+  const imageSrc = icon.src ? icon.src : svgDataUri('#000', icon.glyph || "?");
+
+  // Initialise FlipCard library instance (creates inner structure lazily)
+  const flip = new FlipCard(button, {
+    faceSrc: imageSrc,
+    backSrc: REVERSE_IMAGE_SRC,
+    duration: 600, // matches previous 2 x 300ms halves
+    dwellAtRibMs: 0,
+    highlight: false,
+    onFlipStart: (dir) => {
+      if (dir === 'to-face') {
+        const label = button.dataset.label || 'card';
+        button.setAttribute('aria-label', 'Revealed card showing ' + label);
+      }
+    },
+    onReverse: () => {
+      button.setAttribute('aria-label', 'Hidden card');
+    }
+  });
+  // Attach instance for game logic
+  button._flipCard = flip;
+
+  // Use capture to fully control flip start and prevent auto-toggle
+  button.addEventListener("click", handleCardClick, { capture: true });
   return button;
 }
 function createEmptySlot() {
@@ -511,19 +475,20 @@ function resetBoard() {
 }
 
 function handleCardClick(event) {
-  if (state.busy) {
-    return;
-  }
-
   const card = event.currentTarget;
-  if (card.classList.contains("is-flipped") || card.classList.contains("matched")) {
-    return;
-  }
+  const api = card._flipCard;
+  if (!api) return;
+
+  // Prevent FlipCard's own click from toggling; we drive it
+  event.preventDefault();
+  event.stopImmediatePropagation();
+
+  if (state.busy) return;
+  if (card.classList.contains("matched") || card.disabled) return;
+  if (api.isFlipping || api.isFace) return;
 
   ensureTimerRunning();
   flipCard(card);
-  // Highlight the clicked card so it's easy to track
-  card.classList.add("is-selected");
   state.cardsInPlay.push(card);
 
   if (state.cardsInPlay.length === 2) {
@@ -532,15 +497,37 @@ function handleCardClick(event) {
   }
 }
 
+// Flip helpers backed by FlipCard library
+function waitFlipEnd(card) {
+  const api = card._flipCard;
+  if (!api) return Promise.resolve();
+  if (api.prefersReduced) return Promise.resolve();
+  const inner = card.querySelector('.card__inner');
+  if (!inner) return Promise.resolve();
+  return new Promise((resolve) => {
+    const handler = (e) => {
+      if (e.propertyName !== 'transform') return;
+      if (!card.classList.contains('to-rib')) {
+        inner.removeEventListener('transitionend', handler);
+        resolve();
+      }
+    };
+    inner.addEventListener('transitionend', handler);
+  });
+}
+
 function flipCard(card) {
-  const label = card.dataset.label || "card";
-  card.classList.add("is-flipped");
-  card.setAttribute("aria-label", "Revealed card showing " + label);
+  const api = card._flipCard;
+  if (!api) return;
+  api.flipToFace();
 }
 
 function hideCard(card) {
-  card.classList.remove("is-flipped");
-  card.setAttribute("aria-label", "Hidden card");
+  const api = card._flipCard;
+  if (!api) return Promise.resolve();
+  if (!api.isFace || api.isFlipping) return Promise.resolve();
+  api.flipToReverse();
+  return waitFlipEnd(card);
 }
 
 function markAsMatched(card) {
@@ -574,69 +561,69 @@ function checkForMatch() {
   const [firstCard, secondCard] = state.cardsInPlay;
   recordMove();
 
-  if (firstCard.dataset.value === secondCard.dataset.value) {
-    // Remove highlights on both cards after flip animation completes
-    setTimeout(() => {
-      firstCard.classList.remove('is-selected');
-      secondCard.classList.remove('is-selected');
-    }, 650);
-    const totalPairs = getTotalPairs(state.config);
+  const isMatch = firstCard.dataset.value === secondCard.dataset.value;
+  // Hold a consistent pause before proceeding (match or mismatch)
+  setStatusMessage(isMatch ? buildProgressMessage(state.config.name, state.matchesFound + 1, getTotalPairs(state.config))
+                           : buildTryAgainMessage(state.config.name));
 
-    markAsMatched(firstCard);
-    markAsMatched(secondCard);
-    state.matchesFound += 1;
+  setTimeout(() => {
+    if (isMatch) {
+      // Remove highlights after the pause
+      try { firstCard._flipCard && firstCard._flipCard.hideHighlight(); } catch {}
+      try { secondCard._flipCard && secondCard._flipCard.hideHighlight(); } catch {}
 
-    setStatusMessage(buildProgressMessage(state.config.name, state.matchesFound, totalPairs));
-    clearFlippedCards();
+      const totalPairs = getTotalPairs(state.config);
+      markAsMatched(firstCard);
+      markAsMatched(secondCard);
+      state.matchesFound += 1;
 
-    if (state.matchesFound === totalPairs) {
-      stopTimer();
-      updateScoreFromTime();
-      setStatusMessage(buildWinMessage(state.config.name));
-      // Persist best score per total slots (rows x columns)
-      saveBestScoreIfHigher(state.config, {
-        score: state.score,
-        slots: getTotalCards(state.config),
-        timeMs: state.timer.elapsedMs,
-        moves: state.moves,
-        timestamp: Date.now()
-      });
-      updateBestDisplay();
-      // Save full game result to local database (IndexedDB)
-      (function saveDB() {
-        const record = {
-          status: 'completed',
-          name: state.config.name,
-          email: state.config.email,
-          rows: state.config.rows,
-          columns: state.config.columns,
-          hideMatched: !!state.config.hideMatched,
-          slots: getTotalCards(state.config),
+      setStatusMessage(buildProgressMessage(state.config.name, state.matchesFound, totalPairs));
+      clearFlippedCards();
+
+      if (state.matchesFound === totalPairs) {
+        stopTimer();
+        updateScoreFromTime();
+        setStatusMessage(buildWinMessage(state.config.name));
+        // Persist best score per total slots (rows x columns)
+        saveBestScoreIfHigher(state.config, {
           score: state.score,
-          maxScore: state.maxScore,
+          slots: getTotalCards(state.config),
           timeMs: state.timer.elapsedMs,
           moves: state.moves,
-          ts: Date.now()
-        };
-        saveResultRecord(record);
-        postResultToServer(record);
-      })();
-      const delay = state.config && state.config.hideMatched ? 1000 : 650;
-      setTimeout(showWinAnimation, delay);
+          timestamp: Date.now()
+        });
+        updateBestDisplay();
+        // Save full game result to local database (IndexedDB)
+        (function saveDB() {
+          const record = {
+            status: 'completed',
+            name: state.config.name,
+            email: state.config.email,
+            rows: state.config.rows,
+            columns: state.config.columns,
+            hideMatched: !!state.config.hideMatched,
+            slots: getTotalCards(state.config),
+            score: state.score,
+            maxScore: state.maxScore,
+            timeMs: state.timer.elapsedMs,
+            moves: state.moves,
+            ts: Date.now()
+          };
+          saveResultRecord(record);
+          postResultToServer(record);
+        })();
+        const delay = state.config && state.config.hideMatched ? 600 : 0;
+        setTimeout(showWinAnimation, delay);
+      }
+    } else {
+      // Mismatch: keep highlights during flip-back, then clear after both complete
+      Promise.all([hideCard(firstCard), hideCard(secondCard)]).then(() => {
+        try { firstCard._flipCard && firstCard._flipCard.hideHighlight(); } catch {}
+        try { secondCard._flipCard && secondCard._flipCard.hideHighlight(); } catch {}
+        clearFlippedCards();
+      });
     }
-  } else {
-    setStatusMessage(buildTryAgainMessage(state.config.name));
-    // Remove highlights on both cards after flip animation completes
-    setTimeout(() => {
-      firstCard.classList.remove('is-selected');
-      secondCard.classList.remove('is-selected');
-    }, 650);
-    setTimeout(() => {
-      hideCard(firstCard);
-      hideCard(secondCard);
-      clearFlippedCards();
-    }, 800);
-  }
+  }, RESULT_PAUSE_MS);
 }
 
 function populateWizardFields() {
@@ -742,6 +729,9 @@ function handleStart(event) {
   DOM.playerName.textContent = name;
   DOM.playerNameHighlight.textContent = name;
 
+  // Reflect hide-matched mode as a body class to also gate CSS effects
+  try { document.body.classList.toggle('hide-matched', !!hideMatched); } catch {}
+
   setOverlayVisible(false);
   DOM.restartButton.disabled = false;
   resetBoard();
@@ -767,5 +757,25 @@ window.addEventListener("resize", () => {
     resizeBoard();
   }
 });
+
+// Derive and apply a global card aspect ratio from the reverse image
+(function setGlobalCardAspectFromReverse(){
+  try {
+    const img = new Image();
+    img.onload = function(){
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const w = img.naturalWidth; const h = img.naturalHeight;
+        const hw = h / w; // numeric height/width for JS sizing
+        state.cardAspect = Math.max(0.5, Math.min(2.5, hw));
+        if (DOM.board) {
+          // Expose CSS ratio as width / height for aspect-ratio property
+          DOM.board.style.setProperty('--card-aspect', `${w} / ${h}`);
+          if (state.config) requestAnimationFrame(resizeBoard);
+        }
+      }
+    };
+    img.src = REVERSE_IMAGE_SRC;
+  } catch {}
+})();
 
 
