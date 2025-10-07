@@ -8,6 +8,12 @@
   --accent: #fcd34d;
   --card-bg: #000;
   --shadow: rgba(15, 23, 42, 0.1);
+  /* Controls the minimum free space between viewport and game frame */
+  --frame-gap: clamp(0.75rem, 2.5vw, 1.25rem);
+  /* Inner padding of the game frame (top reduced to lift title+message) */
+  --main-pad-x: clamp(1rem, 3vw, 2rem);
+  --main-pad-top: clamp(0.5rem, 2.5vw, 1.25rem);
+  --main-pad-bottom: clamp(1.25rem, 4vw, 2.5rem);
 }
 
 * {
@@ -22,7 +28,7 @@ body {
   justify-content: center;
   background: radial-gradient(circle at top left, #1d4ed8, #0f172a);
   color: #f8fafc;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
+  padding: var(--frame-gap);
   overflow: hidden;
 }
 
@@ -31,10 +37,10 @@ main {
   width: min(960px, 100%);
   background: rgba(15, 23, 42, 0.75);
   border-radius: 1.5rem;
-  padding: clamp(1.75rem, 3vw, 2.5rem);
+  padding: var(--main-pad-top) var(--main-pad-x) var(--main-pad-bottom);
   box-shadow: 0 40px 80px rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(12px);
-  max-height: calc(100vh - clamp(1.5rem, 4vw, 2.5rem));
+  max-height: calc(100vh - (2 * var(--frame-gap)));
   display: flex;
   flex-direction: column;
   gap: clamp(1.5rem, 3vw, 2rem);
@@ -44,14 +50,23 @@ main {
 header {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 1.25rem;
 }
 
 h1 {
   font-size: clamp(1.75rem, 3vw, 2.75rem);
   margin: 0;
+  align-self: start; /* ensure same top level as Time */
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .controls {
@@ -59,6 +74,7 @@ h1 {
   flex-wrap: wrap;
   gap: 1rem 1.5rem;
   align-items: center;
+  margin-left: auto; /* push to right */
 }
 
 .status {
@@ -68,15 +84,25 @@ h1 {
   font-size: 1rem;
   letter-spacing: 0.02em;
   margin: 0;
+  max-width: var(--status-width, 320px);
 }
 
 .status-greeting {
   font-weight: 600;
+  white-space: nowrap; /* keep header height stable */
 }
 
 .status-message {
   font-size: 0.95rem;
+  /* Keep status area height stable regardless of message length */
+  line-height: 1.25;
+  height: calc(2 * 1.25em); /* 2 lines */
   max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* clamp to 2 lines on larger screens */
 }
 
 .scoreboard {
@@ -85,6 +111,7 @@ h1 {
   align-items: flex-end;
   gap: 0.35rem;
   min-width: 160px;
+  margin-left: auto; /* push scoreboard (and following controls) to the right */
 }
 
 .time-display,
@@ -165,7 +192,7 @@ h1 {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   border: 3px solid var(--accent);
   box-shadow: 0 0 24px rgba(252, 211, 77, 0.65);
   pointer-events: none;
@@ -177,12 +204,12 @@ h1 {
 /* Accessible focus ring for keyboard users */
 .card:focus-visible {
   outline: none;
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   box-shadow: 0 0 0 3px var(--accent);
 }
 
 .empty-slot {
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   background: rgba(15, 23, 42, 0.2);
   border: 2px dashed rgba(148, 163, 184, 0.2);
   pointer-events: none;
@@ -198,7 +225,7 @@ h1 {
   transition: transform 0.3s ease;
   will-change: transform, opacity;
   opacity: 1;
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   overflow: hidden;
 }
 
@@ -218,7 +245,7 @@ h1 {
 .card-face {
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -559,7 +586,7 @@ body.game-won main > *:not(.win-overlay) {
 
 @media (max-width: 720px) {
   main {
-    max-height: calc(100vh - clamp(1rem, 3vw, 1.75rem));
+    max-height: calc(100vh - (2 * var(--frame-gap)));
   }
 }
 
@@ -570,6 +597,8 @@ body.game-won main > *:not(.win-overlay) {
 
   .controls {
     gap: 1rem;
+    width: 100%;
+    justify-content: space-between;
   }
 
   .scoreboard {
@@ -580,6 +609,8 @@ body.game-won main > *:not(.win-overlay) {
     width: 100%;
     justify-content: space-between;
   }
+
+  .header-left { width: 100%; }
 }
 
 @media (max-width: 480px) {
@@ -594,5 +625,14 @@ body.game-won main > *:not(.win-overlay) {
 
   .status {
     width: 100%;
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  /* Allow a bit more room on small screens, but keep fixed height */
+  .status-message {
+    -webkit-line-clamp: 3;
+    height: calc(3 * 1.25em); /* 3 lines on mobile */
+    max-width: 100%;
   }
 }

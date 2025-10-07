@@ -11,6 +11,8 @@
     <title>Flip to Match Game</title>
     <link rel="stylesheet" href="assets/css/styles.css" />
     <link rel="stylesheet" href="assets/css/flip-card.css" />
+    <script src="assets/data/config.js" defer></script>
+    <script src="assets/data/messages.js" defer></script>
   </head>
   <body>
     <div class="start-overlay" role="dialog" aria-modal="true">
@@ -58,12 +60,13 @@
     </div>
     <main>
       <header>
-        <h1>Flip to Match Game</h1>
-        <div class="controls">
+        <div class="header-left">
+          <h1 class="game-title">Flip to Match Game</h1>
           <p class="status" role="status">
-            <span class="status-greeting">Hello, <span class="player-name">Player</span>!</span>
             <span class="status-message">Use the wizard to begin.</span>
           </p>
+        </div>
+        <div class="controls">
           <div class="scoreboard" aria-live="polite">
             <p class="time-display">Time: <span class="time-value">00:00</span></p>
             <p class="score-display">Score: <span class="score-value">0 / 0</span></p>

@@ -2,6 +2,15 @@
 (function (global) {
   'use strict';
 
+  function radiusDebugEnabled() {
+    try { return !!(global.APP_CONFIG && global.APP_CONFIG.debug && global.APP_CONFIG.debug.cardRadius); }
+    catch (_) { return false; }
+  }
+  function radiusDebugLog(label, payload) {
+    if (!radiusDebugEnabled()) return;
+    try { console.log('[FlipCard][radius]', label, payload || ''); } catch {}
+  }
+
   const DEFAULTS = {
     faceSrc: 'assets/img/cards/0.png',
     backSrc: 'assets/img/cards/r.png',
@@ -15,6 +24,7 @@
     proportion: null,         // e.g. '2 / 3', [w,h], or number ratio (w/h)
     mirrorBack: true,         // keep back image non-mirrored
     reducedMotion: null,      // override, or null to auto-detect
+    radius: null,             // CSS length (e.g., '0.75rem' or '12px')
     // Callbacks
     onFlipStart: null,        // (direction: 'to-face'|'to-reverse', api)
     onRib: null,              // (direction, api)
@@ -66,12 +76,17 @@
       this._preload(this.options.faceSrc);
       this._preload(this.options.backSrc);
       this.plane.style.backgroundImage = `url('${this.isFace ? this.options.faceSrc : this.options.backSrc}')`;
+      try {
+        const shown = this.isFace ? this.options.faceSrc : this.options.backSrc;
+        console.log('[FlipCard][imageLoad] init', { face: this.options.faceSrc, back: this.options.backSrc, shown });
+      } catch {}
       this._applyCurrentBackgroundColor();
 
       // Styling per instance
       this.setDuration(this.options.duration);
       if (this.options.proportion) this.setProportion(this.options.proportion);
       else this._setAspectFromReverse();
+      if (this.options.radius != null) this.setRadius(this.options.radius);
 
       if (this.options.mirrorBack) {
         // already handled via CSS (.card.is-reverse .card__plane { scaleX(-1) })
@@ -87,6 +102,17 @@
 
       this._onTransitionEnd = (ev) => this._handleTransitionEnd(ev);
       this.inner.addEventListener('transitionend', this._onTransitionEnd);
+
+      // Debug current radii after init
+      try {
+        if (radiusDebugEnabled()) {
+          const rVar = getComputedStyle(document.documentElement).getPropertyValue('--card-radius');
+          const rRoot = getComputedStyle(this.root).borderRadius;
+          const rInner = this.inner ? getComputedStyle(this.inner).borderRadius : null;
+          const rPlane = this.plane ? getComputedStyle(this.plane).borderRadius : null;
+          radiusDebugLog('init', { option: this.options.radius, cssVar: rVar, root: rRoot, inner: rInner, plane: rPlane });
+        }
+      } catch {}
     }
 
     // ---------- Public API ----------
@@ -211,9 +237,11 @@
         // Swap image at rib
         if (this.flipDirection === 'to-face') {
           this.plane.style.backgroundImage = `url('${this.options.faceSrc}')`;
+          try { console.log('[FlipCard][imageLoad] swap', { to: 'face', src: this.options.faceSrc }); } catch {}
           this._applyFaceBackground();
         } else if (this.flipDirection === 'to-reverse') {
           this.plane.style.backgroundImage = `url('${this.options.backSrc}')`;
+          try { console.log('[FlipCard][imageLoad] swap', { to: 'back', src: this.options.backSrc }); } catch {}
           this._applyBackBackground();
         }
 
@@ -275,7 +303,7 @@
       img.src = this.options.backSrc;
     }
 
-    _preload(src) { const i = new Image(); i.src = src; }
+    _preload(src) { try { console.log('[FlipCard][imageLoad] preload', src); } catch {} const i = new Image(); i.src = src; }
 
     _emit(name, ...args) { const fn = this.options[name]; if (typeof fn === 'function') fn(...args, this); }
 
@@ -300,6 +328,27 @@
     setBackBackground(color) {
       this.options.backBg = color;
       if (!this.isFace) this._applyBackBackground();
+      return this;
+    }
+
+    // ---------- Radius API ----------
+    setRadius(value) {
+      if (value == null || value === '') return this;
+      const css = typeof value === 'number' ? `${value}px` : String(value);
+      this.root.style.setProperty('--card-radius', css);
+      try { this.root.style.borderRadius = css; } catch {}
+      try { if (this.inner) this.inner.style.borderRadius = css; } catch {}
+      try { if (this.plane) this.plane.style.borderRadius = css; } catch {}
+      this.options.radius = css;
+      try {
+        if (radiusDebugEnabled()) {
+          const rVar = getComputedStyle(document.documentElement).getPropertyValue('--card-radius');
+          const rRoot = getComputedStyle(this.root).borderRadius;
+          const rInner = this.inner ? getComputedStyle(this.inner).borderRadius : null;
+          const rPlane = this.plane ? getComputedStyle(this.plane).borderRadius : null;
+          radiusDebugLog('setRadius', { value, css, cssVar: rVar, root: rRoot, inner: rInner, plane: rPlane });
+        }
+      } catch {}
       return this;
     }
   }

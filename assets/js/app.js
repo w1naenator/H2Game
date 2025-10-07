@@ -1,11 +1,11 @@
-﻿/*
+/*
   Flip to Match Game
   License: MIT. You may use, copy, modify, and distribute this code freely,
   provided you keep the copyright and permission notice. See LICENSE.
 */
 // Build a fallback inline SVG image used if a PNG fails to load
 function svgDataUri(bg, text) {
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>` +
     `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 100 100'>` +
     `<defs>` +
     `<linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
@@ -28,7 +28,7 @@ const ICONS = Array.from({ length: IMAGE_COUNT }, (_, i) => ({
 }));
 
 // Reverse (back) image used for the card's hidden side
-const REVERSE_IMAGE_SRC = 'assets/img/cards/r.png';
+let REVERSE_IMAGE_SRC = 'assets/img/cards/r.png';
 
 // Pause between revealing two cards and taking next action (match or flip back)
 const RESULT_PAUSE_MS = 800;
@@ -36,6 +36,7 @@ const RESULT_PAUSE_MS = 800;
 const DOM = {
   board: document.querySelector(".game-board"),
   status: document.querySelector(".status-message"),
+  gameTitle: document.querySelector(".game-title"),
   playerName: document.querySelector(".player-name"),
   playerNameHighlight: document.querySelector(".player-name-highlight"),
   restartButton: document.querySelector(".restart-btn"),
@@ -127,20 +128,121 @@ function hasOddCard(config) {
   return getTotalCards(config) % 2 !== 0;
 }
 
+// Single fallback message used if configs cannot be loaded
+const DEFAULT_MESSAGE = "Let's play!";
+
+// Dynamic message templates loaded from JS/JSON configs
+const MESSAGES = { onMatch: [], onMismatch: [], onWin: [], onStart: [] };
+
+function fillTemplate(tpl, data) {
+  try {
+    return String(tpl).replace(/\{(\w+)\}/g, (_, k) =>
+      Object.prototype.hasOwnProperty.call(data, k) ? String(data[k]) : `{${k}}`
+    );
+  } catch (_) {
+    return String(tpl || "");
+  }
+}
+
+// Load messages.json if available; ignore failures silently
+(function loadDynamicMessages() {
+  try {
+
+function uniqueStrings(list) {
+  try {
+    const seen = new Set();
+    const out = [];
+    for (const s of list || []) {
+      if (typeof s !== 'string') continue;
+      const v = s.trim();
+      if (!v || seen.has(v)) continue;
+      seen.add(v); out.push(v);
+    }
+    return out;
+  } catch (_) { return Array.isArray(list) ? list : []; }
+}
+
+    // Prefer global JS messages (works on file://)
+    try {
+      if (window.APP_MESSAGES) {
+        const m = window.APP_MESSAGES;
+        if (Array.isArray(m.onMatch)) MESSAGES.onMatch = uniqueStrings(m.onMatch);
+        if (Array.isArray(m.onMismatch)) MESSAGES.onMismatch = uniqueStrings(m.onMismatch);
+        if (Array.isArray(m.onWin)) MESSAGES.onWin = uniqueStrings(m.onWin);
+        if (Array.isArray(m.onStart)) MESSAGES.onStart = uniqueStrings(m.onStart);
+        // Backwards compatibility keys
+        if ((!MESSAGES.onMatch || !MESSAGES.onMatch.length) && Array.isArray(m.encouragements)) {
+          MESSAGES.onMatch = uniqueStrings(m.encouragements);
+        }
+        if ((!MESSAGES.onWin || !MESSAGES.onWin.length) && Array.isArray(m.wins)) {
+          MESSAGES.onWin = uniqueStrings(m.wins);
+        }
+      }
+    } catch (_) {}
+
+    if (typeof fetch !== 'function' || !/^https?:$/.test(location.protocol)) return;
+    fetch('assets/data/messages.json', { cache: 'no-store' })
+      .then((resp) => { if (!resp.ok) throw new Error('http'); return resp.json(); })
+      .then((data) => {
+        // Preferred keys (deduped)
+        if (data && Array.isArray(data.onMatch)) MESSAGES.onMatch = uniqueStrings(data.onMatch);
+        if (data && Array.isArray(data.onMismatch)) MESSAGES.onMismatch = uniqueStrings(data.onMismatch);
+        if (data && Array.isArray(data.onWin)) MESSAGES.onWin = uniqueStrings(data.onWin);
+        if (data && Array.isArray(data.onStart)) MESSAGES.onStart = uniqueStrings(data.onStart);
+        // Backwards compatibility with older schema
+        if ((!MESSAGES.onMatch || !MESSAGES.onMatch.length) && Array.isArray(data.encouragements)) {
+          MESSAGES.onMatch = uniqueStrings(data.encouragements);
+        }
+        if ((!MESSAGES.onWin || !MESSAGES.onWin.length) && Array.isArray(data.wins)) {
+          MESSAGES.onWin = uniqueStrings(data.wins);
+        }
+      })
+      .catch(() => { /* rely on inline/defaults */ });
+  } catch (_) { /* noop */ }
+})();
+
 function buildIntroMessage(config, name) {
-  return `${name}, find all the matching pairs!`;
+  try {
+    const list = Array.isArray(MESSAGES.onStart) && MESSAGES.onStart.length ? MESSAGES.onStart : null;
+    if (list) {
+      const tpl = list[Math.floor(Math.random() * list.length)];
+      return fillTemplate(tpl, { name });
+    }
+  } catch (_) {}
+  return DEFAULT_MESSAGE;
 }
 
 function buildProgressMessage(name, found, total) {
-  return `Great work, ${name}! ${found} / ${total} pairs found.`;
+  try {
+    const list = Array.isArray(MESSAGES.onMatch) && MESSAGES.onMatch.length ? MESSAGES.onMatch : null;
+    if (list) {
+      const tpl = list[Math.floor(Math.random() * list.length)];
+      return fillTemplate(tpl, { name, found, total });
+    }
+  } catch (_) {}
+  return DEFAULT_MESSAGE;
 }
 
 function buildTryAgainMessage(name) {
-  return `Try again, ${name}!`;
+  try {
+    const list = Array.isArray(MESSAGES.onMismatch) && MESSAGES.onMismatch.length ? MESSAGES.onMismatch : null;
+    if (list) {
+      const tpl = list[Math.floor(Math.random() * list.length)];
+      return fillTemplate(tpl, { name });
+    }
+  } catch (_) {}
+  return DEFAULT_MESSAGE;
 }
 
 function buildWinMessage(name) {
-  return `✨ Incredible, ${name}! You matched them all. Hit restart to play again.`;
+  try {
+    const list = Array.isArray(MESSAGES.onWin) && MESSAGES.onWin.length ? MESSAGES.onWin : null;
+    if (list) {
+      const tpl = list[Math.floor(Math.random() * list.length)];
+      return fillTemplate(tpl, { name });
+    }
+  } catch (_) {}
+  return DEFAULT_MESSAGE;
 }
 
 function setStatusMessage(message) {
@@ -153,10 +255,40 @@ function clearBoard() {
 }
 
 function setOverlayVisible(isVisible) {
-  DOM.startOverlay.classList.toggle("is-hidden", !isVisible);
-  DOM.startOverlay.setAttribute("aria-hidden", String(!isVisible));
-  // Also toggle a body flag so CSS can reliably hide the game UI behind the wizard
-  document.body.classList.toggle("wizard-open", !!isVisible);
+  try {
+    if (isVisible) {
+      // Show immediately: re-enable interaction, clear aria-hidden
+      try { DOM.startOverlay.removeAttribute('inert'); } catch {}
+      DOM.startOverlay.classList.remove('is-hidden');
+      DOM.startOverlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('wizard-open');
+      return;
+    }
+
+    // Hiding: first move focus outside the overlay, then hide/accessibility-toggle
+    const active = document.activeElement;
+    if (active && DOM.startOverlay && DOM.startOverlay.contains(active)) {
+      // Prefer a visible control outside the overlay
+      let target = (DOM.restartButton && !DOM.restartButton.disabled) ? DOM.restartButton : document.querySelector('h1');
+      if (!target) target = document.body;
+      if (target && target.tagName === 'H1') {
+        target.setAttribute('tabindex', '-1');
+        target.focus();
+        target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
+      } else if (target && typeof target.focus === 'function') {
+        target.focus();
+      }
+      try { active.blur && active.blur(); } catch {}
+    }
+
+    // Defer aria-hidden/inert to the next frame so focus move commits first
+    requestAnimationFrame(() => {
+      try { DOM.startOverlay.setAttribute('inert', ''); } catch {}
+      DOM.startOverlay.classList.add('is-hidden');
+      DOM.startOverlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('wizard-open');
+    });
+  } catch {}
 }
 
 function updateScoreDisplay() {
@@ -211,6 +343,7 @@ function updateBestDisplay() {
 // Try posting a result to server-side PHP endpoint if available; ignore failures
 async function postResultToServer(record) {
   try {
+    if (!/^https?:$/.test(location.protocol)) return false;
     const res = await fetch('api/save_result.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,8 +505,13 @@ function createCardElement(icon, index) {
   const flip = new FlipCard(button, {
     faceSrc: imageSrc,
     backSrc: REVERSE_IMAGE_SRC,
-    duration: 600, // matches previous 2 x 300ms halves
-    dwellAtRibMs: 0,
+    duration: (CONFIG.card && Number(CONFIG.card.durationMs)) || 600,
+    dwellAtRibMs: (CONFIG.card && Number(CONFIG.card.dwellAtRibMs)) || 0,
+    postFlipPauseMs: (CONFIG.card && Number(CONFIG.card.postFlipPauseMs)) || 0,
+    mirrorBack: CONFIG.card && typeof CONFIG.card.mirrorBack === 'boolean' ? CONFIG.card.mirrorBack : true,
+    faceBg: CONFIG.card && CONFIG.card.faceBg ? CONFIG.card.faceBg : '#000000',
+    backBg: CONFIG.card && CONFIG.card.backBg ? CONFIG.card.backBg : '#000000',
+    radius: CONFIG.card && Object.prototype.hasOwnProperty.call(CONFIG.card, 'radius') ? CONFIG.card.radius : null,
     highlight: false,
     onFlipStart: (dir) => {
       if (dir === 'to-face') {
@@ -390,6 +528,19 @@ function createCardElement(icon, index) {
 
   // Use capture to fully control flip start and prevent auto-toggle
   button.addEventListener("click", handleCardClick, { capture: true });
+
+  // Debug creation radii
+  try {
+    if (APP_CONFIG && APP_CONFIG.debug && APP_CONFIG.debug.cardRadius) {
+      const inner = button.querySelector('.card__inner');
+      const plane = button.querySelector('.card__plane');
+      const rootR = getComputedStyle(button).borderRadius;
+      const innerR = inner ? getComputedStyle(inner).borderRadius : 'n/a';
+      const planeR = plane ? getComputedStyle(plane).borderRadius : 'n/a';
+      console.log('[CreateCard][radius]', { rootR, innerR, planeR, option: flip.options.radius });
+    }
+  } catch {}
+
   return button;
 }
 function createEmptySlot() {
@@ -409,7 +560,34 @@ function showWinAnimation() {
   if (!state.config) {
     return;
   }
-  DOM.playerNameHighlight.textContent = state.config.name;
+  const name = state.config.name;
+  // Update overlay heading with a randomized win message and keep name highlighted
+  try {
+    const heading = DOM.winOverlay && DOM.winOverlay.querySelector('h2');
+    if (heading) {
+      const msg = buildWinMessage(name);
+      const idx = msg.indexOf(name);
+      heading.replaceChildren();
+      if (idx >= 0) {
+        const before = msg.slice(0, idx);
+        const after = msg.slice(idx + name.length);
+        if (before) heading.appendChild(document.createTextNode(before));
+        const span = document.createElement('span');
+        span.className = 'player-name-highlight';
+        span.textContent = name;
+        heading.appendChild(span);
+        if (after) heading.appendChild(document.createTextNode(after));
+        // Keep DOM cache in sync
+        DOM.playerNameHighlight = span;
+      } else {
+        heading.textContent = msg;
+      }
+    }
+  } catch (_) {
+    // Fallback to original static name placement
+    if (DOM.playerNameHighlight) DOM.playerNameHighlight.textContent = name;
+  }
+  if (DOM.playerNameHighlight) DOM.playerNameHighlight.textContent = name;
   DOM.finalScoreValue.textContent = `${state.score} / ${state.maxScore}`;
   DOM.finalMovesValue.textContent = String(state.moves);
   DOM.finalTimeValue.textContent = formatTime(state.timer.elapsedMs);
@@ -563,8 +741,10 @@ function checkForMatch() {
 
   const isMatch = firstCard.dataset.value === secondCard.dataset.value;
   // Hold a consistent pause before proceeding (match or mismatch)
-  setStatusMessage(isMatch ? buildProgressMessage(state.config.name, state.matchesFound + 1, getTotalPairs(state.config))
-                           : buildTryAgainMessage(state.config.name));
+  // For mismatches, provide immediate feedback (replace onStart message too)
+  if (!isMatch) {
+    setStatusMessage(buildTryAgainMessage(state.config.name));
+  }
 
   setTimeout(() => {
     if (isMatch) {
@@ -577,6 +757,7 @@ function checkForMatch() {
       markAsMatched(secondCard);
       state.matchesFound += 1;
 
+      // Now that the match is confirmed and counted, update progress message once
       setStatusMessage(buildProgressMessage(state.config.name, state.matchesFound, totalPairs));
       clearFlippedCards();
 
@@ -726,7 +907,7 @@ function handleStart(event) {
   }
 
   state.config = { name, email, rows, columns, hideMatched };
-  DOM.playerName.textContent = name;
+  if (DOM.playerName) DOM.playerName.textContent = name;
   DOM.playerNameHighlight.textContent = name;
 
   // Reflect hide-matched mode as a body class to also gate CSS effects
@@ -777,5 +958,86 @@ window.addEventListener("resize", () => {
     img.src = REVERSE_IMAGE_SRC;
   } catch {}
 })();
+
+
+// -------- Config (game-wide settings) --------
+const CONFIG = { gameName: 'H2 Game', card: { radius: '0.75rem', durationMs: 600, dwellAtRibMs: 0, postFlipPauseMs: 0, mirrorBack: true, faceBg: '#000000', backBg: '#000000' } };
+
+function applyGameConfig() {
+  try {
+    if (DOM.gameTitle && CONFIG.gameName) DOM.gameTitle.textContent = CONFIG.gameName;
+    if (CONFIG.gameName) document.title = CONFIG.gameName;
+    // Apply card visual variables globally
+    if (CONFIG.card && Object.prototype.hasOwnProperty.call(CONFIG.card, 'radius')) {
+      const val = CONFIG.card.radius;
+      const css = typeof val === 'number' ? `${val}px` : String(val);
+      document.documentElement.style.setProperty('--card-radius', css);
+      try {
+        if (CONFIG.debug && CONFIG.debug.cardRadius) {
+          const rVar = getComputedStyle(document.documentElement).getPropertyValue('--card-radius');
+          console.log('[Config][radius] set --card-radius to', css, 'raw:', val, 'computedVar:', rVar);
+        }
+      } catch {}
+    }
+    // Back image path (allows swapping to a square-corner asset)
+    if (CONFIG.card && typeof CONFIG.card.backImage === 'string' && CONFIG.card.backImage.trim()) {
+      REVERSE_IMAGE_SRC = CONFIG.card.backImage.trim();
+    }
+  } catch (_) {}
+}
+
+// Debug helper: dump card radii of current DOM
+function __dumpCardRadii(note) {
+  try {
+    const cards = document.querySelectorAll('.card');
+    const rVar = getComputedStyle(document.documentElement).getPropertyValue('--card-radius');
+    console.log('[Dump][radius]', note || '', 'cssVar:', rVar, 'cards:', cards.length);
+    let i = 0;
+    cards.forEach((c) => {
+      const inner = c.querySelector('.card__inner');
+      const plane = c.querySelector('.card__plane');
+      const rootR = getComputedStyle(c).borderRadius;
+      const innerR = inner ? getComputedStyle(inner).borderRadius : 'n/a';
+      const planeR = plane ? getComputedStyle(plane).borderRadius : 'n/a';
+      console.log('[Card][radius]', i++, { rootR, innerR, planeR });
+    });
+  } catch (e) { console.warn('dump radius failed', e); }
+}
+try { window.__debugCardRadii = __dumpCardRadii; } catch {}
+
+(function loadConfig(){
+  // Prefer global JS config (works on file://)
+  try {
+    if (window.APP_CONFIG) {
+      const cfg = window.APP_CONFIG;
+      if (typeof cfg.gameName === 'string' && cfg.gameName.trim()) {
+        CONFIG.gameName = cfg.gameName.trim();
+      }
+      if (cfg.card && typeof cfg.card === 'object') {
+        CONFIG.card = { ...CONFIG.card, ...cfg.card };
+      }
+      applyGameConfig();
+    }
+  } catch (_) {}
+try {
+    if (typeof fetch !== 'function' || !/^https?:$/.test(location.protocol)) return;
+    fetch('assets/data/config.json', { cache: 'no-store' })
+      .then((r) => { if (!r.ok) throw new Error('http'); return r.json(); })
+      .then((data) => {
+        if (data && typeof data.gameName === 'string' && data.gameName.trim()) {
+          CONFIG.gameName = data.gameName.trim();
+        }
+        if (data && typeof data.card === 'object' && data.card) {
+          CONFIG.card = { ...CONFIG.card, ...data.card };
+        }
+        applyGameConfig();
+      })
+      .catch(() => { /* rely on inline/defaults */ });
+  } catch (_) {}
+})();
+
+
+
+
 
 

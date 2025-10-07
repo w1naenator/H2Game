@@ -9,7 +9,7 @@
 .card__inner {
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--card-radius, 1rem);
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d; /* Safari */
   will-change: transform, opacity;
@@ -35,7 +35,7 @@
 .card__plane {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  border-radius: var(--card-radius, 1rem);
   background-color: #000; /* default background for both sides */
   background-position: center center;
   background-repeat: no-repeat;
@@ -87,7 +87,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  border-radius: var(--card-radius, 1rem);
   border: 3px solid var(--accent, #fcd34d);
   box-shadow: 0 0 24px rgba(252, 211, 77, 0.65);
   pointer-events: none;
